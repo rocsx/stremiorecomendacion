@@ -1,0 +1,16 @@
+.vercel
+
+# Environment variables — NEVER commit this
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Cache files
+gemini_cache.json
+tmdb_cache.json
+
+# macOS
+.DS_Store
