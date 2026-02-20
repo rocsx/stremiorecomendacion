@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const memoryCache = new Map();
-const CACHE_TTL = 72 * 60 * 60 * 1000; // 72 hours in ms
+const CACHE_TTL = 60 * 60 * 60 * 1000; // 60 hours in ms
 
 /**
 /**
@@ -72,18 +72,20 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
   const prompt = type === 'series' 
   ? `Based on the following TV series I recently watched:
     ${historyText}
-    Recommend 15 TV series I might like. ${genreInstruction}
+    Recommend 10 popular, widely-known TV series I might like. ${genreInstruction}
+    IMPORTANT: Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
     Do not include the series I already watched in your recommendations. ${excludeList}
-    Output ONLY a JSON array of objects. Do not use markdown blocks or explanations. Each object must have exactly two properties:
-    - "title": The title of the TV series (string)
+    Output ONLY a JSON array of objects. No markdown, no explanations, just the raw JSON. Each object must have exactly two properties:
+    - "title": The title of the TV series in English (string)
     - "year": The release year of the TV series (number)
     Example: [{"title": "Breaking Bad", "year": 2008}, {"title": "Stranger Things", "year": 2016}]`
   : `Based on the following movies I recently watched:
     ${historyText}
-    Recommend 15 movies I might like. ${movieGenreInstruction}
+    Recommend 10 popular, widely-known movies I might like. ${movieGenreInstruction}
+    IMPORTANT: Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
     Do not include the movies I already watched in your recommendations. ${excludeList}
-    Output ONLY a JSON array of objects. Do not use markdown blocks or explanations. Each object must have exactly two properties:
-    - "title": The title of the movie (string)
+    Output ONLY a JSON array of objects. No markdown, no explanations, just the raw JSON. Each object must have exactly two properties:
+    - "title": The title of the movie in English (string)
     - "year": The release year of the movie (number)
     Example: [{"title": "Inception", "year": 2010}, {"title": "The Matrix", "year": 1999}]`;
 

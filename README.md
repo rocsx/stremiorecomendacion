@@ -2,27 +2,16 @@
 
 Addon de Stremio que genera recomendaciones personalizadas de **películas y series** usando tu historial de Trakt.tv y la IA de Google Gemini.
 
-🌐 **Demo en vivo:** [stremio-gemini-recommender.vercel.app](https://stremio-gemini-recommender.vercel.app)
-
 ---
 
 ## ✨ Características
 
-- 🎬 Recomendaciones de películas y series basadas en tu historial reciente (últimos 30 días de Trakt)
+- 🎬 Recomendaciones de películas y series basadas en tu historial reciente (últimos 60 días de Trakt)
 - 🧠 Motor de IA: Google Gemini — entiende géneros, actores, directores y temáticas
 - 🎭 **Filtros de género** en Stremio (Acción, Comedia, Drama, Terror, Sci-Fi, Romance, Thriller)
 - 🚫 Nunca recomienda algo que ya hayas visto
-- 🔐 Multi-usuario: cada persona instala el addon con sus propias API Keys (no hay claves del servidor)
-- ⚡ Caché en memoria de 72h + caché del cliente Stremio (no consume disco)
-- 🔄 Retry inteligente: si TMDB falla, reintenta con nuevas recomendaciones sin volver a llamar a Trakt
-
----
-
-## 🚀 Instalación rápida (producción)
-
-1. Abre [stremio-gemini-recommender.vercel.app](https://stremio-gemini-recommender.vercel.app) en tu navegador (también desde TV/celular)
-2. Llena el formulario con tus credenciales
-3. Pulsa **"Install in Stremio"** o copia el link y pégalo manualmente en Stremio → Addons → Add from URL
+- 🔐 Multi-usuario: cada persona instala el addon con sus propias API Keys
+- ⚡ Caché en memoria de 60h (sin archivos en disco)
 
 ---
 
@@ -37,9 +26,9 @@ Addon de Stremio que genera recomendaciones personalizadas de **películas y ser
 
 ---
 
-## 💻 Desarrollo local
+## 💻 Instalación y uso local
 
-### 1. Clona el repositorio e instala dependencias
+### 1. Clona e instala dependencias
 ```bash
 git clone <tu-repo>
 cd StremioRecomendacion
@@ -47,7 +36,7 @@ npm install
 ```
 
 ### 2. Configura el archivo `.env`
-Crea un archivo `.env` en la raíz basándote en `.env.example`:
+Crea un `.env` basándote en `.env.example`:
 ```env
 GEMINI_API_KEY=tu_clave
 TMDB_API_KEY=tu_clave
@@ -61,39 +50,27 @@ PORT=7005
 ```bash
 npm start
 ```
-El servidor arranca en `http://localhost:7005/`. Abre esa URL desde tu celular/TV en la misma red para instalar el addon de prueba.
 
-> **Nota:** Si el puerto 7005 está en uso, mata el proceso primero:
+El servidor arranca en `http://localhost:7005/`. Abre esa URL desde tu celular o TV en la misma red local para configurar e instalar el addon en Stremio.
+
+> Si el puerto 7005 ya está en uso, mátalo primero:
 > ```bash
 > lsof -ti :7005 | xargs kill -9
 > ```
 
 ---
 
-## ☁️ Deploy en Vercel
-
-```bash
-npm install -g vercel
-vercel login
-vercel --prod --yes
-```
-
-El proyecto ya incluye `vercel.json` configurado. El addon se desplegará automáticamente.
-
----
-
 ## 🗂️ Estructura del proyecto
 
 ```
-├── server.js           # Servidor Express (local + Vercel serverless)
+├── server.js           # Servidor Express
 ├── addon.js            # Manifiesto y handlers del addon de Stremio
 ├── public/
 │   └── index.html      # Página web de configuración
 ├── services/
-│   ├── trakt.js        # Obtiene historial de Trakt (últimos 30 días)
-│   ├── gemini.js       # Llama a Gemini AI para generar recomendaciones
-│   └── tmdb.js         # Busca metadatos y portadas en TMDB
-├── vercel.json         # Configuración de despliegue en Vercel
+│   ├── trakt.js        # Historial de Trakt (últimos 60 días)
+│   ├── gemini.js       # Recomendaciones con Google Gemini AI
+│   └── tmdb.js         # Metadatos y portadas desde TMDB
 └── .env.example        # Plantilla de variables de entorno
 ```
 

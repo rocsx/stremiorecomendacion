@@ -51,12 +51,12 @@ const builder = new addonBuilder(manifest);
 // Handle Catalog Requests
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
   // Extract user configuration from the Stremio install URL
-  // (local .env fallback commented out — for debug use only)
+  // Falls back to .env for local dev/testing
   const userConfig = {
-    trakt_username: config?.trakt_username, // || process.env.TRAKT_USERNAME,
-    trakt_client_id: config?.trakt_client_id, // || process.env.TRAKT_CLIENT_ID,
-    tmdb_api_key: config?.tmdb_api_key, // || process.env.TMDB_API_KEY,
-    gemini_api_key: config?.gemini_api_key, // || process.env.GEMINI_API_KEY
+    trakt_username: config?.trakt_username || process.env.TRAKT_USERNAME,
+    trakt_client_id: config?.trakt_client_id || process.env.TRAKT_CLIENT_ID,
+    tmdb_api_key: config?.tmdb_api_key || process.env.TMDB_API_KEY,
+    gemini_api_key: config?.gemini_api_key || process.env.GEMINI_API_KEY,
   };
 
   // Only execute on the first page to avoid spamming the APIs
@@ -78,21 +78,11 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
       
       if (history.length > 0) {
         recommendations = await getMovieRecommendations(history, userConfig, allWatched, extra.genre);
-        // Run all TMDB searches in PARALLEL (was serial - this saves ~10s on Vercel)
+        // Run all TMDB searches in PARALLEL to minimize total response time
         const results = await Promise.all(
           recommendations.map(rec => searchMovie(rec.title, rec.year, userConfig))
         );
         metas = results.filter(Boolean);
-
-        // RETRY: if TMDB returned 0, skip Trakt (already done) and ask Gemini for NEW recommendations
-        if (metas.length === 0 && recommendations.length > 0) {
-          console.log('⚠️ 0 results from TMDB. Retrying with fresh Gemini recommendations (Trakt skipped)...');
-          const freshRecs = await getMovieRecommendations(history, userConfig, allWatched, extra.genre, true);
-          const retryResults = await Promise.all(
-            freshRecs.map(rec => searchMovie(rec.title, rec.year, userConfig))
-          );
-          metas = retryResults.filter(Boolean);
-        }
       }
     } 
     else if (type === 'series' && id === 'gemini-series-recommendations') {
@@ -103,21 +93,11 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
       
       if (history.length > 0) {
         recommendations = await getSeriesRecommendations(history, userConfig, allWatched, extra.genre);
-        // Run all TMDB searches in PARALLEL (was serial - this saves ~10s on Vercel)
+        // Run all TMDB searches in PARALLEL to minimize total response time
         const results = await Promise.all(
           recommendations.map(rec => searchSeries(rec.title, rec.year, userConfig))
         );
         metas = results.filter(Boolean);
-
-        // RETRY: if TMDB returned 0, skip Trakt (already done) and ask Gemini for NEW recommendations
-        if (metas.length === 0 && recommendations.length > 0) {
-          console.log('⚠️ 0 results from TMDB. Retrying with fresh Gemini recommendations (Trakt skipped)...');
-          const freshRecs = await getSeriesRecommendations(history, userConfig, allWatched, extra.genre, true);
-          const retryResults = await Promise.all(
-            freshRecs.map(rec => searchSeries(rec.title, rec.year, userConfig))
-          );
-          metas = retryResults.filter(Boolean);
-        }
       }
     } else {
       return { metas: [] };

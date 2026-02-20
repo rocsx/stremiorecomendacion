@@ -27,13 +27,13 @@ async function getWatchedShows(userConfig) {
     'trakt-api-key': clientId,
   };
 
-  // Only ask for history from the last 30 days to heavily optimize speed
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Only ask for history from the last 60 days to heavily optimize speed
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
   try {
-    // 1. Get recent history to seed recommendations (last 30 days only)
+    // 1. Get recent history to seed recommendations (last 60 days only)
     const historyResponse = await axios.get(
-      `https://api.trakt.tv/users/${username}/history/shows?start_at=${thirtyDaysAgo}`,
+      `https://api.trakt.tv/users/${username}/history/shows?start_at=${sixtyDaysAgo}`,
       { headers }
     );
     
@@ -98,12 +98,12 @@ async function getWatchedMovies(userConfig) {
     return { recent: [], allWatched: [] };
   }
 
-  // Only ask for history from the last 30 days to heavily optimize speed
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Only ask for history from the last 60 days to heavily optimize speed
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const response = await axios.get(
-      `https://api.trakt.tv/users/${username}/history/movies?start_at=${thirtyDaysAgo}`,
+      `https://api.trakt.tv/users/${username}/history/movies?start_at=${sixtyDaysAgo}`,
       {
         headers: {
           'Content-Type': 'application/json',
