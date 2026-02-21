@@ -51,7 +51,9 @@ PORT=7005
 npm start
 ```
 
-El servidor arranca en `http://localhost:7005/`. Abre esa URL desde tu celular o TV en la misma red local para configurar e instalar el addon en Stremio.
+El servidor arranca en el puerto 7005. Abre esa URL desde tu celular o TV en la misma red local para configurar e instalar el addon en Stremio:
+- `http://localhost:7005/configure`
+- `http://10.X.X.X:7005/configure` (Tu IP local)
 
 > Si el puerto 7005 ya está en uso, mátalo primero:
 > ```bash

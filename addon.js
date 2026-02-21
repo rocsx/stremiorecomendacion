@@ -9,6 +9,7 @@ const manifest = {
   version: '2.1.0',
   name: 'Gemini AI Recommender',
   description: 'Smart personalized recommendations for Movies and Series using your Trakt watch history and Google Gemini AI.',
+  logo: 'https://stremio-gemini-recommender.vercel.app/configure/logo.jpg',
   behaviorHints: {
     configurable: true,
     configurationRequired: true

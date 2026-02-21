@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const memoryCache = new Map();
-const CACHE_TTL = 72 * 60 * 60 * 1000; // 72 hours in ms
+const CACHE_TTL = 60 * 60 * 60 * 1000; // 60 hours in ms
 
 function getCachedTmdb(key) {
   const cached = memoryCache.get(key);
@@ -115,5 +115,6 @@ async function searchTmdb(title, year, type, userConfig) {
 
 module.exports = {
   searchMovie: (title, year, config) => searchTmdb(title, year, 'movie', config),
-  searchSeries: (title, year, config) => searchTmdb(title, year, 'series', config)
+  searchSeries: (title, year, config) => searchTmdb(title, year, 'series', config),
+  clearCache: () => memoryCache.clear()
 };

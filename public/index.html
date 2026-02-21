@@ -268,9 +268,9 @@
 
         const configPath = JSON.stringify(configParams);
         
-        // Construct the full Stremio manifest URL
-        const currentUrl = window.location.href.replace(/\/$/, "");
-        const manifestUrl = `${currentUrl}/${encodeURIComponent(configPath)}/manifest.json`;
+        // Construct the full Stremio manifest URL (must be at the root, not inside /configure)
+        const baseUrl = window.location.origin;
+        const manifestUrl = `${baseUrl}/${encodeURIComponent(configPath)}/manifest.json`;
         
         // To trigger Stremio directly, replace http/https with stremio protocol
         const stremioLink = manifestUrl.replace(/^https?:\/\//i, "stremio://");

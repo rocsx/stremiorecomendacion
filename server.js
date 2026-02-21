@@ -4,6 +4,7 @@ const path = require('path');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const geminiService = require('./services/gemini');
+const tmdbService = require('./services/tmdb');
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -14,11 +15,17 @@ app.use(cors());
 // Cache reset endpoint
 app.get('/reset-cache', (req, res) => {
   geminiService.clearCache();
-  res.send('✅ Caché de Gemini reiniciado correctamente. Stremio volverá a pedir nuevas recomendaciones.');
+  tmdbService.clearCache();
+  res.send('✅ Caché local de Gemini y TMDB reiniciado. IMPORTANTE: Reinicia tu Stremio para forzar que borre su propio caché interno.');
 });
 
-// Serve the static configuration page at the root URL
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve the static configuration page at /configure
+app.use('/configure', express.static(path.join(__dirname, 'public')));
+
+// Redirect root to /configure for users who visit the base URL
+app.get('/', (req, res) => {
+  res.redirect('/configure');
+});
 
 // Mount the Stremio Addon middleware
 // Stremio supports arbitrary paths before /manifest.json
@@ -51,8 +58,8 @@ if (require.main === module) {
       .flat()
       .find(i => i.family === 'IPv4' && !i.internal)?.address || 'TU_IP_LOCAL';
 
-    console.log(`✅ Addon Configuration Page active on http://localhost:${PORT}/ (Mac)`);
-    console.log(`📺 To install on TV/Phone, open http://${localIp}:${PORT}/ in that device's browser`);
+    console.log(`✅ Addon Configuration Page active on http://localhost:${PORT}/configure (Mac)`);
+    console.log(`📺 To install on TV/Phone, open http://${localIp}:${PORT}/configure in that device's browser`);
 
     // --- DEBUG MODE (uncomment to print install link based on .env) ---
     // const { TRAKT_USERNAME, TRAKT_CLIENT_ID, TMDB_API_KEY, GEMINI_API_KEY } = process.env;
