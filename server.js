@@ -3,12 +3,19 @@ const cors = require('cors');
 const path = require('path');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
+const geminiService = require('./services/gemini');
 const dotenv = require('dotenv');
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
+
+// Cache reset endpoint
+app.get('/reset-cache', (req, res) => {
+  geminiService.clearCache();
+  res.send('✅ Caché de Gemini reiniciado correctamente. Stremio volverá a pedir nuevas recomendaciones.');
+});
 
 // Serve the static configuration page at the root URL
 app.use(express.static(path.join(__dirname, 'public')));

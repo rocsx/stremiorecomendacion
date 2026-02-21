@@ -63,14 +63,13 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
   const excludeList = allWatchedTitles.length > 0 ? `\nDo absolutely NOT include these specific titles you already know I watched:\n- ${allWatchedTitles.slice(0, 50).join('\n- ')}` : '';
-  
   const genreInstruction = requestedGenre ? `ALL recommendations MUST strictly belong to the ${requestedGenre} genre.` : 'Consider shows with similar themes, genres, or actors.';
   const movieGenreInstruction = requestedGenre ? `ALL recommendations MUST strictly belong to the ${requestedGenre} genre.` : 'Consider movies with similar themes, genres, lead actors, or directors.';
 
-  const prompt = type === 'series' 
-  ? `Based on the following TV series I recently watched:
+  const prompt = type === 'series'
+    ? `Based on the following TV series I recently watched:
     ${historyText}
     Recommend 10 popular, widely-known TV series I might like. ${genreInstruction}
     IMPORTANT: Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
@@ -79,7 +78,7 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
     - "title": The title of the TV series in English (string)
     - "year": The release year of the TV series (number)
     Example: [{"title": "Breaking Bad", "year": 2008}, {"title": "Stranger Things", "year": 2016}]`
-  : `Based on the following movies I recently watched:
+    : `Based on the following movies I recently watched:
     ${historyText}
     Recommend 10 popular, widely-known movies I might like. ${movieGenreInstruction}
     IMPORTANT: Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
@@ -89,28 +88,60 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
     - "year": The release year of the movie (number)
     Example: [{"title": "Inception", "year": 2010}, {"title": "The Matrix", "year": 1999}]`;
 
-  try {
-    console.log(`Calling Gemini API for ${type} (Not Cached)...`);
+  // Helper: call Gemini with a given model and return parsed JSON
+  async function callGemini(modelName) {
+    console.log(`Calling Gemini API for ${type} with ${modelName}...`);
+    const model = genAI.getGenerativeModel({ model: modelName });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    
-    // Attempt to parse the JSON response from Gemini
-    try {
-      // Strip markdown code block delimiters that Gemini sometimes adds (```json ... ```)
-      // Uses \s* to handle any whitespace/newlines around the backticks
-      const cleanedText = text
-        .replace(/^```(?:json)?\s*/i, '')  // remove leading ```json or ``` 
-        .replace(/\s*```\s*$/i, '')         // remove trailing ```
-        .trim();
+    // Strip markdown code block delimiters that Gemini sometimes adds
+    const cleanedText = text
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim();
+    return JSON.parse(cleanedText);
+  }
 
-      const parsedData = JSON.parse(cleanedText);
-      setCachedRecommendations(cacheKey, parsedData);
-      
-      return parsedData;
-    } catch (parseError) {
-      console.error('Failed to parse Gemini response as JSON. Raw response:', text);
-      return [];
+  try {
+    // Definimos la lista de modelos de mayor a menor calidad. 
+    // Si uno da 429, probamos el siguiente automáticamente.
+    const fallbackModels = [
+      'gemini-2.5-flash',                // Mejor modelo (20 req/día gratis)
+      'gemini-2.5-flash-lite',           // Variante ligera
+      'gemini-2.0-flash-lite-001',       // Lite de versión 2.0
+      'gemini-flash-lite-latest',        // El modelo lite global (para asegurar cuota)
+      'gemini-pro-latest'                // Último cartucho
+    ];
+
+    let parsedData = null;
+    let lastError = null;
+
+    for (const modelName of fallbackModels) {
+      try {
+        parsedData = await callGemini(modelName);
+        console.log(`✅ Success with model: ${modelName}`);
+        break; // Éxito! Salimos del bucle
+      } catch (err) {
+        lastError = err;
+        const is429 = err.message?.includes('429') || err.message?.includes('quota');
+        if (is429) {
+          console.warn(`⚠️ Model ${modelName} quota exceeded or unavailable. Trying next...`);
+          continue; // Pasamos al siguiente modelo
+        } else {
+          // Si el error NO es por cuota/límites (es un error de red o de sintaxis general), detenemos aquí
+          throw err;
+        }
+      }
     }
+
+    if (!parsedData) {
+      // Si llegamos hasta aquí, significa que probamos todos los modelos y todos fallaron por cuota
+      console.error('❌ Todas las opciones de modelos fallaron por límite de cuota (429).');
+      throw lastError;
+    }
+
+    setCachedRecommendations(cacheKey, parsedData);
+    return parsedData;
   } catch (error) {
     console.error('Error generating recommendations with Gemini:', error.message);
     return [];
@@ -120,5 +151,6 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
 module.exports = {
   getRecommendations,
   getMovieRecommendations: (h, config, a, genre, forceRefresh) => getRecommendations(h, config, 'movie', a, genre, forceRefresh),
-  getSeriesRecommendations: (h, config, a, genre, forceRefresh) => getRecommendations(h, config, 'series', a, genre, forceRefresh)
+  getSeriesRecommendations: (h, config, a, genre, forceRefresh) => getRecommendations(h, config, 'series', a, genre, forceRefresh),
+  clearCache: () => memoryCache.clear()
 };
