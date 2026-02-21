@@ -14,6 +14,10 @@ const manifest = {
     configurable: true,
     configurationRequired: true
   },
+  stremioAddonsConfig: {
+    issuer: "https://stremio-addons.net",
+    signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..MaOyO11iXJX97CnS20GBYg.Lzsz_WtlJtNcDV9fTFmtsyJakMbs0Z-fNg9UJ_5XMYeLCuGG7UbyP-FpguHrpHEyPbnxRwYJMEGsM5_ekeW8gia16k_JVFzjfU-EMeGdhL2c0cyIr3OjU5UVC0JNaAcv.XZkgP4mTqgMnVCkyaqYlUw"
+  },
   types: ['movie', 'series'],
   catalogs: [
     {
