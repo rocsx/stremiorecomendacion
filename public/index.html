@@ -243,7 +243,7 @@
 </div>
 
 <script>
-    document.getElementById('configForm').addEventListener('submit', function(e) {
+    document.getElementById('configForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const traktUsername = document.getElementById('traktUsername').value.trim();
@@ -252,11 +252,57 @@
         const geminiApiKey = document.getElementById('geminiApiKey').value.trim();
 
         if (!traktUsername || !traktClientId || !tmdbApiKey || !geminiApiKey) {
+            document.getElementById('errorMessage').innerText = 'Please fill all fields to generate the link.';
             document.getElementById('errorMessage').style.display = 'block';
             return;
         }
         
         document.getElementById('errorMessage').style.display = 'none';
+
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const originalBtnHTML = submitBtn.innerHTML;
+        submitBtn.innerHTML = 'Validating keys...';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.7';
+        submitBtn.style.cursor = 'not-allowed';
+
+        try {
+            const response = await fetch('/api/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    trakt_username: traktUsername,
+                    trakt_client_id: traktClientId,
+                    tmdb_api_key: tmdbApiKey,
+                    gemini_api_key: geminiApiKey
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                document.getElementById('errorMessage').innerText = data.error || 'Validation failed. Please check your keys.';
+                document.getElementById('errorMessage').style.display = 'block';
+                submitBtn.innerHTML = originalBtnHTML;
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+                return;
+            }
+        } catch (error) {
+            document.getElementById('errorMessage').innerText = 'Network error during validation. Make sure the server is running.';
+            document.getElementById('errorMessage').style.display = 'block';
+            submitBtn.innerHTML = originalBtnHTML;
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+            return;
+        }
+
+        submitBtn.innerHTML = originalBtnHTML;
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
 
         // Stremio expects the config as a JSON string literal in the URL path
         const configParams = {

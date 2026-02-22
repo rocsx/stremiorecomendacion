@@ -11,6 +11,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 // Cache reset endpoint
 app.get('/reset-cache', (req, res) => {
@@ -21,6 +22,52 @@ app.get('/reset-cache', (req, res) => {
 
 // Serve the static configuration page at /configure
 app.use('/configure', express.static(path.join(__dirname, 'public')));
+
+// API Validation Endpoint
+app.post('/api/validate', async (req, res) => {
+  const { trakt_username, trakt_client_id, tmdb_api_key, gemini_api_key } = req.body;
+  const axios = require('axios');
+  
+  try {
+    // 1. Validate Trakt
+    try {
+      await axios.get(`https://api.trakt.tv/users/${trakt_username}/profile`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'trakt-api-version': '2',
+          'trakt-api-key': trakt_client_id
+        }
+      });
+    } catch (e) {
+      if (e.response && e.response.status === 404) {
+        return res.status(400).json({ error: "Usuario de Trakt no encontrado." });
+      }
+      return res.status(400).json({ error: "Trakt Client ID inválido o error de API." });
+    }
+
+    // 2. Validate TMDB
+    try {
+      const isBearer = tmdb_api_key.length > 50;
+      const headers = isBearer ? { Authorization: `Bearer ${tmdb_api_key}` } : {};
+      const params = isBearer ? {} : { api_key: tmdb_api_key };
+      await axios.get(`https://api.themoviedb.org/3/authentication`, { headers, params });
+    } catch (e) {
+      return res.status(400).json({ error: "TMDB API Key inválido." });
+    }
+
+    // 3. Validate Gemini
+    try {
+      await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${gemini_api_key}`);
+    } catch (e) {
+      return res.status(400).json({ error: "Google Gemini API Key inválido o agotado." });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Validation error:", error.message);
+    res.status(500).json({ error: "Error interno al validar las claves." });
+  }
+});
 
 // Redirect root to /configure for users who visit the base URL
 app.get('/', (req, res) => {
