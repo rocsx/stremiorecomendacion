@@ -9,7 +9,7 @@ const manifest = {
   version: '2.1.0',
   name: 'Gemini AI Recommender',
   description: 'Smart personalized recommendations for Movies and Series using your Trakt watch history and Google Gemini AI.',
-  logo: 'https://github.com/rocsx/stremiorecomendacion/blob/main/public/logo.jpg',
+  logo: 'https://github.com/rocsx/stremiorecomendacion/blob/main/public/logo.jpg?raw=true',
   behaviorHints: {
     configurable: true,
     configurationRequired: true
