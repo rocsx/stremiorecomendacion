@@ -17,6 +17,8 @@
             --border: #334155;
             --input-bg: #0f1115;
             --error: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
         }
 
         body {
@@ -79,6 +81,16 @@
             letter-spacing: 0.5px;
         }
 
+        .input-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .input-row input {
+            flex: 1;
+        }
+
         input[type="text"], input[type="password"] {
             width: 100%;
             padding: 12px 16px;
@@ -98,8 +110,79 @@
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
         }
 
+        input.valid {
+            border-color: var(--success) !important;
+        }
+
+        input.invalid {
+            border-color: var(--error) !important;
+        }
+
         input::placeholder {
             color: #475569;
+        }
+
+        .verify-btn {
+            flex-shrink: 0;
+            padding: 10px 14px;
+            background-color: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+        }
+
+        .verify-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .verify-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .verify-btn.checking {
+            color: var(--text-muted);
+            border-color: var(--border);
+        }
+
+        .verify-btn.valid {
+            color: var(--success);
+            border-color: var(--success);
+        }
+
+        .verify-btn.invalid {
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        .field-feedback {
+            font-size: 12px;
+            margin-top: 6px;
+            display: none;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .field-feedback.success {
+            color: var(--success);
+            display: flex;
+        }
+
+        .field-feedback.error {
+            color: var(--error);
+            display: flex;
+        }
+
+        .field-feedback.warning {
+            color: var(--warning);
+            display: flex;
         }
 
         .help-text {
@@ -201,27 +284,45 @@
         <p class="subtitle">Personalized Movies and TV Series recommendations based on your Trakt watch history.</p>
 
         <form id="configForm">
+            <!-- Trakt Username -->
             <div class="form-group">
                 <label for="traktUsername">Trakt Username</label>
-                <input type="text" id="traktUsername" placeholder="e.g. john_doe" required>
+                <div class="input-row">
+                    <input type="text" id="traktUsername" placeholder="e.g. john_doe" required>
+                </div>
                 <span class="help-text">We need your public username to fetch your history.</span>
             </div>
 
+            <!-- Trakt Client ID -->
             <div class="form-group">
                 <label for="traktClientId">Trakt API Client ID</label>
-                <input type="password" id="traktClientId" placeholder="Paste your 64-character Client ID" required>
+                <div class="input-row">
+                    <input type="password" id="traktClientId" placeholder="Paste your 64-character Client ID" required>
+                    <button type="button" class="verify-btn" id="verifyTraktBtn" onclick="verifyTrakt()">Verify</button>
+                </div>
+                <div class="field-feedback" id="traktFeedback"></div>
                 <span class="help-text">Get it by creating an App at <a href="https://trakt.tv/oauth/applications" target="_blank">Trakt API</a>.</span>
             </div>
 
+            <!-- TMDB -->
             <div class="form-group">
                 <label for="tmdbApiKey">TMDB API Key (v3 or v4)</label>
-                <input type="password" id="tmdbApiKey" placeholder="Paste your standard Key or Access Token" required>
+                <div class="input-row">
+                    <input type="password" id="tmdbApiKey" placeholder="Paste your standard Key or Access Token" required>
+                    <button type="button" class="verify-btn" id="verifyTmdbBtn" onclick="verifyTmdb()">Verify</button>
+                </div>
+                <div class="field-feedback" id="tmdbFeedback"></div>
                 <span class="help-text">Get it from <a href="https://www.themoviedb.org/settings/api" target="_blank">TMDB API Settings</a>.</span>
             </div>
 
+            <!-- Gemini -->
             <div class="form-group">
                 <label for="geminiApiKey">Google Gemini AI Key</label>
-                <input type="password" id="geminiApiKey" placeholder="AIzaSy..." required>
+                <div class="input-row">
+                    <input type="password" id="geminiApiKey" placeholder="AIzaSy..." required>
+                    <button type="button" class="verify-btn" id="verifyGeminiBtn" onclick="verifyGemini()">Verify</button>
+                </div>
+                <div class="field-feedback" id="geminiFeedback"></div>
                 <span class="help-text">Get a free key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</span>
             </div>
 
@@ -243,7 +344,172 @@
 </div>
 
 <script>
-    document.getElementById('configForm').addEventListener('submit', function(e) {
+    // Tracks which fields have been successfully verified
+    const validated = { trakt: false, tmdb: false, gemini: false };
+
+    // Reset a field's validation state when user edits the input
+    function resetValidation(field, inputId, feedbackId, btnId) {
+        validated[field] = false;
+        const input = document.getElementById(inputId);
+        const feedback = document.getElementById(feedbackId);
+        const btn = document.getElementById(btnId);
+        if (input) input.classList.remove('valid', 'invalid');
+        if (feedback) { feedback.className = 'field-feedback'; feedback.style.display = 'none'; feedback.innerHTML = ''; }
+        if (btn) { btn.classList.remove('valid', 'invalid'); btn.textContent = 'Verify'; }
+        updateSubmitBtn();
+    }
+
+    function updateSubmitBtn() {
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const allValid = validated.trakt && validated.tmdb && validated.gemini;
+        submitBtn.disabled = !allValid;
+        submitBtn.style.opacity = allValid ? '1' : '0.45';
+        submitBtn.style.cursor = allValid ? 'pointer' : 'not-allowed';
+        submitBtn.title = allValid ? '' : 'Verify all fields before generating the install link.';
+    }
+
+    // --- Shared feedback helper ---
+    function setFeedback(feedbackId, inputId, btnId, type, message) {
+        const feedback = document.getElementById(feedbackId);
+        const input = document.getElementById(inputId);
+        const btn = document.getElementById(btnId);
+
+        feedback.className = 'field-feedback ' + type;
+        const icons = { success: '✅', error: '❌', warning: '⚠️' };
+        feedback.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+        feedback.style.display = 'flex';
+
+        if (input) {
+            input.classList.remove('valid', 'invalid');
+            if (type === 'success' || type === 'warning') input.classList.add('valid');
+            if (type === 'error') input.classList.add('invalid');
+        }
+        if (btn) {
+            btn.classList.remove('valid', 'invalid', 'checking');
+            if (type === 'success' || type === 'warning') btn.classList.add('valid');
+            if (type === 'error') btn.classList.add('invalid');
+        }
+    }
+
+    // Initialise submit button as disabled
+    document.addEventListener('DOMContentLoaded', () => {
+        updateSubmitBtn();
+        // Reset validation when user edits any input
+        document.getElementById('traktUsername').addEventListener('input', () => resetValidation('trakt', 'traktClientId', 'traktFeedback', 'verifyTraktBtn'));
+        document.getElementById('traktClientId').addEventListener('input', () => resetValidation('trakt', 'traktClientId', 'traktFeedback', 'verifyTraktBtn'));
+        document.getElementById('tmdbApiKey').addEventListener('input', () => resetValidation('tmdb', 'tmdbApiKey', 'tmdbFeedback', 'verifyTmdbBtn'));
+        document.getElementById('geminiApiKey').addEventListener('input', () => resetValidation('gemini', 'geminiApiKey', 'geminiFeedback', 'verifyGeminiBtn'));
+    });
+
+    function setLoading(btnId, isLoading) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.disabled = isLoading;
+        btn.classList.toggle('checking', isLoading);
+        btn.textContent = isLoading ? '...' : 'Verify';
+    }
+
+    // --- Trakt verification ---
+    async function verifyTrakt() {
+        const username = document.getElementById('traktUsername').value.trim();
+        const clientId = document.getElementById('traktClientId').value.trim();
+        if (!username || !clientId) {
+            setFeedback('traktFeedback', 'traktClientId', 'verifyTraktBtn', 'error', 'Fill in Username and Client ID first.');
+            return;
+        }
+        setLoading('verifyTraktBtn', true);
+        try {
+            const res = await fetch('/api/validate/trakt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trakt_username: username, trakt_client_id: clientId })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                validated.trakt = true;
+                if (data.warning) {
+                    setFeedback('traktFeedback', 'traktClientId', 'verifyTraktBtn', 'warning', data.warning);
+                } else {
+                    setFeedback('traktFeedback', 'traktClientId', 'verifyTraktBtn', 'success', 'Trakt credentials are valid!');
+                }
+            } else {
+                validated.trakt = false;
+                setFeedback('traktFeedback', 'traktClientId', 'verifyTraktBtn', 'error', data.error || 'Validation failed.');
+            }
+            updateSubmitBtn();
+        } catch (e) {
+            setFeedback('traktFeedback', 'traktClientId', 'verifyTraktBtn', 'error', 'Network error. Is the server running?');
+        }
+        setLoading('verifyTraktBtn', false);
+        document.getElementById('verifyTraktBtn').textContent = 'Verify';
+    }
+
+    // --- TMDB verification ---
+    async function verifyTmdb() {
+        const key = document.getElementById('tmdbApiKey').value.trim();
+        if (!key) {
+            setFeedback('tmdbFeedback', 'tmdbApiKey', 'verifyTmdbBtn', 'error', 'Paste your TMDB API Key first.');
+            return;
+        }
+        setLoading('verifyTmdbBtn', true);
+        try {
+            const res = await fetch('/api/validate/tmdb', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tmdb_api_key: key })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                validated.tmdb = true;
+                setFeedback('tmdbFeedback', 'tmdbApiKey', 'verifyTmdbBtn', 'success', 'TMDB API Key is valid!');
+            } else {
+                validated.tmdb = false;
+                setFeedback('tmdbFeedback', 'tmdbApiKey', 'verifyTmdbBtn', 'error', data.error || 'Validation failed.');
+            }
+            updateSubmitBtn();
+        } catch (e) {
+            setFeedback('tmdbFeedback', 'tmdbApiKey', 'verifyTmdbBtn', 'error', 'Network error. Is the server running?');
+        }
+        setLoading('verifyTmdbBtn', false);
+        document.getElementById('verifyTmdbBtn').textContent = 'Verify';
+    }
+
+    // --- Gemini verification ---
+    async function verifyGemini() {
+        const key = document.getElementById('geminiApiKey').value.trim();
+        if (!key) {
+            setFeedback('geminiFeedback', 'geminiApiKey', 'verifyGeminiBtn', 'error', 'Paste your Gemini API Key first.');
+            return;
+        }
+        setLoading('verifyGeminiBtn', true);
+        try {
+            const res = await fetch('/api/validate/gemini', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gemini_api_key: key })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                validated.gemini = true;
+                if (data.warning) {
+                    setFeedback('geminiFeedback', 'geminiApiKey', 'verifyGeminiBtn', 'warning', data.warning);
+                } else {
+                    setFeedback('geminiFeedback', 'geminiApiKey', 'verifyGeminiBtn', 'success', 'Gemini API Key is valid!');
+                }
+            } else {
+                validated.gemini = false;
+                setFeedback('geminiFeedback', 'geminiApiKey', 'verifyGeminiBtn', 'error', data.error || 'Validation failed.');
+            }
+            updateSubmitBtn();
+        } catch (e) {
+            setFeedback('geminiFeedback', 'geminiApiKey', 'verifyGeminiBtn', 'error', 'Network error. Is the server running?');
+        }
+        setLoading('verifyGeminiBtn', false);
+        document.getElementById('verifyGeminiBtn').textContent = 'Verify';
+    }
+
+    // --- Main form submit ---
+    document.getElementById('configForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const traktUsername = document.getElementById('traktUsername').value.trim();
@@ -252,11 +518,57 @@
         const geminiApiKey = document.getElementById('geminiApiKey').value.trim();
 
         if (!traktUsername || !traktClientId || !tmdbApiKey || !geminiApiKey) {
+            document.getElementById('errorMessage').innerText = 'Please fill all fields to generate the link.';
             document.getElementById('errorMessage').style.display = 'block';
             return;
         }
         
         document.getElementById('errorMessage').style.display = 'none';
+
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const originalBtnHTML = submitBtn.innerHTML;
+        submitBtn.innerHTML = 'Validating keys...';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.7';
+        submitBtn.style.cursor = 'not-allowed';
+
+        try {
+            const response = await fetch('/api/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    trakt_username: traktUsername,
+                    trakt_client_id: traktClientId,
+                    tmdb_api_key: tmdbApiKey,
+                    gemini_api_key: geminiApiKey
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                document.getElementById('errorMessage').innerText = data.error || 'Validation failed. Please check your keys.';
+                document.getElementById('errorMessage').style.display = 'block';
+                submitBtn.innerHTML = originalBtnHTML;
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+                return;
+            }
+        } catch (error) {
+            document.getElementById('errorMessage').innerText = 'Network error during validation. Make sure the server is running.';
+            document.getElementById('errorMessage').style.display = 'block';
+            submitBtn.innerHTML = originalBtnHTML;
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+            return;
+        }
+
+        submitBtn.innerHTML = originalBtnHTML;
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
 
         // Stremio expects the config as a JSON string literal in the URL path
         const configParams = {
