@@ -6,7 +6,7 @@ const { searchMovie, searchSeries } = require('./services/tmdb');
 // Define the Addon Manifest
 const manifest = {
   id: 'org.gemini.recommender.dual.v2',
-  version: '2.1.0',
+  version: '2.2.0',
   name: 'Gemini AI Recommender',
   description: 'Smart personalized recommendations for Movies and Series using your Trakt watch history and Google Gemini AI.',
   logo: 'https://github.com/rocsx/stremiorecomendacion/blob/main/public/logo.jpg?raw=true',
