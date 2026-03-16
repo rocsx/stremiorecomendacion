@@ -71,22 +71,30 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
   const prompt = type === 'series'
     ? `Based on the following TV series I recently watched:
     ${historyText}
-    Recommend 10 popular, widely-known TV series I might like. ${genreInstruction}
-    IMPORTANT: Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
-    Do not include the series I already watched in your recommendations. ${excludeList}
+    Recommend 10 TV series I might like. ${genreInstruction}
+    CRITICAL RULES YOU MUST FOLLOW:
+    1. Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
+    2. Prioritize critically acclaimed, high-quality productions over pure popularity to avoid low-rated content.
+    3. ONLY recommend TV series with a TMDB/IMDB audience rating of 7.0 or strictly higher.
+    4. ONLY recommend TV series released in the last 5 years.
+    5. Do not include the series I already watched in your recommendations. ${excludeList}
     Output ONLY a JSON array of objects. No markdown, no explanations, just the raw JSON. Each object must have exactly two properties:
     - "title": The title of the TV series in English (string)
     - "year": The release year of the TV series (number)
-    Example: [{"title": "Breaking Bad", "year": 2008}, {"title": "Stranger Things", "year": 2016}]`
+    Example: [{"title": "Severance", "year": 2022}, {"title": "The Last of Us", "year": 2023}]`
     : `Based on the following movies I recently watched:
     ${historyText}
-    Recommend 10 popular, widely-known movies I might like. ${movieGenreInstruction}
-    IMPORTANT: Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
-    Do not include the movies I already watched in your recommendations. ${excludeList}
+    Recommend 10 movies I might like. ${movieGenreInstruction}
+    CRITICAL RULES YOU MUST FOLLOW:
+    1. Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
+    2. Prioritize critically acclaimed, high-quality productions over pure popularity to avoid low-rated content.
+    3. ONLY recommend movies with a TMDB/IMDB audience rating of 7.0 or strictly higher.
+    4. ONLY recommend movies released in the last 5 years.
+    5. Do not include the movies I already watched in your recommendations. ${excludeList}
     Output ONLY a JSON array of objects. No markdown, no explanations, just the raw JSON. Each object must have exactly two properties:
     - "title": The title of the movie in English (string)
     - "year": The release year of the movie (number)
-    Example: [{"title": "Inception", "year": 2010}, {"title": "The Matrix", "year": 1999}]`;
+    Example: [{"title": "Dune: Part Two", "year": 2024}, {"title": "Spider-Man: Across the Spider-Verse", "year": 2023}]`;
 
   // Helper: call Gemini with a given model and return parsed JSON
   async function callGemini(modelName) {
