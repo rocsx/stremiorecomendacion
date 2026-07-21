@@ -33,6 +33,18 @@ function setCachedRecommendations(historyKey, data) {
 }
 
 /**
+ * Normalizes a title for reliable comparison (ignores case, accents and punctuation)
+ */
+function normalizeTitle(title) {
+  return String(title)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
  * Generates recommendations using Gemini based on watch history
  * @param {Array} history - List of recently watched items (for seeding ideas)
  * @param {Object} userConfig - User API keys {gemini_api_key}
@@ -58,39 +70,41 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
   // Cache key includes type and optional genre so movies and series don't collide
   const cacheKey = `${type}_${requestedGenre || 'all'}_${historyText}`;
   const cachedData = getCachedRecommendations(cacheKey);
-  if (cachedData && !forceRefresh) {
+  if (cachedData && cachedData.length > 0 && !forceRefresh) {
     return cachedData;
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  const excludeList = allWatchedTitles.length > 0 ? `\nDo absolutely NOT include these specific titles you already know I watched:\n- ${allWatchedTitles.slice(0, 50).join('\n- ')}` : '';
+  const excludeList = allWatchedTitles.length > 0 ? `\nEXCLUSION LIST (I have ALREADY WATCHED all of these, comparison is case-insensitive — never recommend any of them):\n- ${allWatchedTitles.slice(0, 250).join('\n- ')}` : '';
   const genreInstruction = requestedGenre ? `ALL recommendations MUST strictly belong to the ${requestedGenre} genre.` : 'Consider shows with similar themes, genres, or actors.';
   const movieGenreInstruction = requestedGenre ? `ALL recommendations MUST strictly belong to the ${requestedGenre} genre.` : 'Consider movies with similar themes, genres, lead actors, or directors.';
 
   const prompt = type === 'series'
     ? `Based on the following TV series I recently watched:
     ${historyText}
-    Recommend 10 TV series I might like. ${genreInstruction}
+    Recommend 20 TV series I might like but have NOT seen yet. ${genreInstruction}
     CRITICAL RULES YOU MUST FOLLOW:
-    1. Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
+    1. Every recommendation must be a real TV series that exists in IMDB/TMDB under the exact title and year you output.
     2. Prioritize critically acclaimed, high-quality productions over pure popularity to avoid low-rated content.
     3. ONLY recommend TV series with a TMDB/IMDB audience rating of 7.0 or strictly higher.
     4. ONLY recommend TV series released in the last 5 years.
-    5. Do not include the series I already watched in your recommendations. ${excludeList}
+    5. NEVER recommend anything I already watched: not the series listed in my recent history above, not anything in the exclusion list below, and no remakes, reboots or direct spin-offs of them either. ${excludeList}
+    6. Give me FRESH discoveries: assume I already know the most obvious mega-hits related to my history, so mix a few acclaimed popular series with lesser-known hidden gems that still satisfy rules 1-4. Avoid repeating the same predictable picks that every recommendation engine suggests.
     Output ONLY a JSON array of objects. No markdown, no explanations, just the raw JSON. Each object must have exactly two properties:
     - "title": The title of the TV series in English (string)
     - "year": The release year of the TV series (number)
     Example: [{"title": "Severance", "year": 2022}, {"title": "The Last of Us", "year": 2023}]`
     : `Based on the following movies I recently watched:
     ${historyText}
-    Recommend 10 movies I might like. ${movieGenreInstruction}
+    Recommend 20 movies I might like but have NOT seen yet. ${movieGenreInstruction}
     CRITICAL RULES YOU MUST FOLLOW:
-    1. Only recommend well-known titles that are easy to find in databases like IMDB/TMDB.
+    1. Every recommendation must be a real movie that exists in IMDB/TMDB under the exact title and year you output.
     2. Prioritize critically acclaimed, high-quality productions over pure popularity to avoid low-rated content.
     3. ONLY recommend movies with a TMDB/IMDB audience rating of 7.0 or strictly higher.
     4. ONLY recommend movies released in the last 5 years.
-    5. Do not include the movies I already watched in your recommendations. ${excludeList}
+    5. NEVER recommend anything I already watched: not the movies listed in my recent history above, not anything in the exclusion list below, and no remakes, reboots or direct sequels of them either. ${excludeList}
+    6. Give me FRESH discoveries: assume I already know the most obvious blockbusters related to my history, so mix a few acclaimed popular movies with lesser-known hidden gems that still satisfy rules 1-4. Avoid repeating the same predictable picks that every recommendation engine suggests.
     Output ONLY a JSON array of objects. No markdown, no explanations, just the raw JSON. Each object must have exactly two properties:
     - "title": The title of the movie in English (string)
     - "year": The release year of the movie (number)
@@ -99,7 +113,8 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
   // Helper: call Gemini with a given model and return parsed JSON
   async function callGemini(modelName) {
     console.log(`Calling Gemini API for ${type} with ${modelName}...`);
-    const model = genAI.getGenerativeModel({ model: modelName });
+    // Higher temperature so repeated calls surface different titles instead of the same safe picks
+    const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { temperature: 1.1 } });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     // Strip markdown code block delimiters that Gemini sometimes adds
@@ -148,8 +163,29 @@ async function getRecommendations(history, userConfig, type, allWatchedTitles = 
       throw lastError;
     }
 
-    setCachedRecommendations(cacheKey, parsedData);
-    return parsedData;
+    // Deterministic safety net: even if Gemini ignores the exclusion rules,
+    // drop anything already watched and dedupe the recommendations themselves
+    const watchedSet = new Set(allWatchedTitles.map(normalizeTitle));
+    history.forEach(m => watchedSet.add(normalizeTitle(m.title)));
+    const seenRecs = new Set();
+    const filteredData = (Array.isArray(parsedData) ? parsedData : []).filter(rec => {
+      if (!rec || !rec.title) return false;
+      const key = normalizeTitle(rec.title);
+      if (watchedSet.has(key) || seenRecs.has(key)) return false;
+      seenRecs.add(key);
+      return true;
+    });
+    const removedCount = (Array.isArray(parsedData) ? parsedData.length : 0) - filteredData.length;
+    if (removedCount > 0) {
+      console.log(`Filtered out ${removedCount} already-watched/duplicate ${type} recommendations from Gemini output.`);
+    }
+
+    // Never cache an empty list: it would pin the error card for the full TTL
+    // instead of letting Stremio's 5-minute retry get a fresh attempt
+    if (filteredData.length > 0) {
+      setCachedRecommendations(cacheKey, filteredData);
+    }
+    return filteredData;
   } catch (error) {
     console.error('Error generating recommendations with Gemini:', error.message);
     return [];
