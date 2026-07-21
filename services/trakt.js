@@ -37,23 +37,28 @@ async function getWatchedShows(userConfig) {
       { headers }
     );
     
-    // 2. Get the ENTIRE list of watched shows to build a solid deny-list 
-    // We keep this full query to make sure we don't recommend ANYTHING ever watched
-    const watchedResponse = await axios.get(
-      `https://api.trakt.tv/users/${username}/watched/shows`,
-      { headers }
-    );
+    // 2. Get the ENTIRE list of watched shows to build a solid deny-list
+    // We keep this full query to make sure we don't recommend ANYTHING ever watched.
+    // Non-essential: if it fails we degrade to a history-only deny list instead of killing the feature
+    let watchedData = [];
+    try {
+      const watchedResponse = await axios.get(
+        `https://api.trakt.tv/users/${username}/watched/shows`,
+        { headers }
+      );
+      watchedData = watchedResponse.data || [];
+    } catch (watchedError) {
+      console.warn('Could not fetch full watched shows list, continuing with recent history only:', watchedError.message);
+    }
 
     const uniqueShows = [];
     const showIds = new Set();
     const allWatchedShowTitles = new Set();
-    
+
     // Process full watched library for the deny list
-    if (watchedResponse.data) {
-      for (const item of watchedResponse.data) {
-        if (item.show) {
-          allWatchedShowTitles.add(item.show.title.toLowerCase().trim());
-        }
+    for (const item of watchedData) {
+      if (item.show) {
+        allWatchedShowTitles.add(item.show.title.toLowerCase().trim());
       }
     }
     
@@ -98,33 +103,68 @@ async function getWatchedMovies(userConfig) {
     return { recent: [], allWatched: [] };
   }
 
+  const headers = {
+    'Content-Type': 'application/json',
+    'trakt-api-version': '2',
+    'trakt-api-key': clientId,
+  };
+
   // Only ask for history from the last 15 days to heavily optimize speed and capture current mood
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
 
   try {
-    const response = await axios.get(
+    // 1. Get recent history to seed recommendations (last 15 days only)
+    const historyResponse = await axios.get(
       `https://api.trakt.tv/users/${username}/history/movies?start_at=${fifteenDaysAgo}`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'trakt-api-version': '2',
-          'trakt-api-key': clientId,
-        },
-      }
+      { headers }
     );
 
-    // Extract all previously watched movies to avoid recommending them again
-    const allWatchedMovieTitles = response.data.map(item => item.movie.title.toLowerCase().trim());
+    // 2. Get the ENTIRE list of watched movies to build a solid deny-list
+    // We keep this full query to make sure we don't recommend ANYTHING ever watched.
+    // Non-essential: if it fails we degrade to a history-only deny list instead of killing the feature
+    let watchedData = [];
+    try {
+      const watchedResponse = await axios.get(
+        `https://api.trakt.tv/users/${username}/watched/movies`,
+        { headers }
+      );
+      watchedData = watchedResponse.data || [];
+    } catch (watchedError) {
+      console.warn('Could not fetch full watched movies list, continuing with recent history only:', watchedError.message);
+    }
 
-    // Return the last 5 watched movies metadata to seed Gemini
-    const recentMovies = response.data.slice(0, 5).map(item => ({
-      title: item.movie.title,
-      year: item.movie.year,
-      trakt_id: item.movie.ids.trakt,
-      imdb_id: item.movie.ids.imdb,
-    }));
-    
-    return { recent: recentMovies, allWatched: allWatchedMovieTitles };
+    const allWatchedMovieTitles = new Set();
+
+    // Process full watched library for the deny list
+    for (const item of watchedData) {
+      if (item.movie) {
+        allWatchedMovieTitles.add(item.movie.title.toLowerCase().trim());
+      }
+    }
+
+    // Process recent history for the seed list
+    const recentMovies = [];
+    const movieIds = new Set();
+    if (historyResponse.data) {
+      for (const item of historyResponse.data) {
+        if (item.movie) {
+          // Fallback parsing into deny list just in case
+          allWatchedMovieTitles.add(item.movie.title.toLowerCase().trim());
+
+          if (!movieIds.has(item.movie.ids.trakt) && recentMovies.length < 5) {
+            movieIds.add(item.movie.ids.trakt);
+            recentMovies.push({
+              title: item.movie.title,
+              year: item.movie.year,
+              trakt_id: item.movie.ids.trakt,
+              imdb_id: item.movie.ids.imdb,
+            });
+          }
+        }
+      }
+    }
+
+    return { recent: recentMovies, allWatched: Array.from(allWatchedMovieTitles) };
   } catch (error) {
     console.error('Error fetching Trakt movie history:', error.message);
     return { recent: [], allWatched: [] };
