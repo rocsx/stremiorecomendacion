@@ -1,5 +1,13 @@
 # Gemini AI Recommender for Stremio - Changelog
 
+## [2.2.1] - 2026-07-21
+
+### Added
+- **Deterministic Exclusion Filter:** Added a server-side title normalization filter to fully strip out already-watched/history items and duplicate results, acting as a reliable fail-safe if the Gemini model misses the prompt instructions.
+- **Improved Gemini Creativity:** Higher model temperature (`1.1`) and refined prompts to mix critically acclaimed hits with lesser-known "hidden gems", avoiding predictable suggestions.
+- **Robust Trakt API Error Handling:** Graceful fallback to recent 15-day history when full library watched lists fail to fetch, preventing addon crashes.
+- **Fail-safe Cache Management:** Prevent caching empty lists or error states locally to allow rapid retries by the Stremio client.
+
 ## [1.1.0] - 2026-03-15
 
 ### Added

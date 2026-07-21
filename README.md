@@ -2,6 +2,8 @@
 
 Addon de Stremio que genera recomendaciones personalizadas de **películas y series** usando tu historial de Trakt.tv y la IA de Google Gemini.
 
+> 🏷️ **Versión actual:** `v2.2.1` — Consulta el [CHANGELOG.md](file:///Users/a34578/Mis%20Apps/StremioRecomendacion/CHANGELOG.md) para ver todos los detalles.
+
 ---
 
 ## ✨ Características
