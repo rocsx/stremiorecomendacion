@@ -6,6 +6,48 @@ dotenv.config();
 const TRAKT_CLIENT_ID = process.env.TRAKT_CLIENT_ID;
 const TRAKT_USERNAME = process.env.TRAKT_USERNAME;
 
+// Trakt's API is fronted by Cloudflare, which intermittently returns 403 to
+// requests that arrive without a User-Agent header (they look like bots/scrapers).
+// axios does NOT set a User-Agent by default, so we send a descriptive one on
+// every call. This is the main cause of the flaky "403" fetching history.
+const TRAKT_USER_AGENT = 'StremioRecomendacion/2.2.1';
+
+/**
+ * Builds the standard Trakt API headers, including the required User-Agent.
+ * @param {string} clientId - Trakt API client ID
+ * @returns {Object} headers
+ */
+function traktHeaders(clientId) {
+  return {
+    'Content-Type': 'application/json',
+    'trakt-api-version': '2',
+    'trakt-api-key': clientId,
+    'User-Agent': TRAKT_USER_AGENT,
+  };
+}
+
+/**
+ * GET a Trakt URL with a short retry on transient blocks (Cloudflare 403,
+ * rate-limit 429, network errors, or 5xx). Non-retriable errors bubble up.
+ * @param {string} url
+ * @param {Object} headers
+ * @param {number} retries - number of extra attempts after the first
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+async function traktGet(url, headers, retries = 2) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await axios.get(url, { headers });
+    } catch (err) {
+      const status = err.response?.status;
+      const retriable = !err.response || status === 403 || status === 429 || (status >= 500 && status < 600);
+      if (attempt >= retries || !retriable) throw err;
+      // Small linear backoff to let Cloudflare / rate limits settle.
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+}
+
 /**
 /**
  * Fetches the user's recently watched tv shows from Trakt.tv and their full watched list
@@ -21,30 +63,26 @@ async function getWatchedShows(userConfig) {
     return { recent: [], allWatched: [] };
   }
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'trakt-api-version': '2',
-    'trakt-api-key': clientId,
-  };
+  const headers = traktHeaders(clientId);
 
   // Only ask for history from the last 15 days to heavily optimize speed and capture current mood
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     // 1. Get recent history to seed recommendations (last 15 days only)
-    const historyResponse = await axios.get(
+    const historyResponse = await traktGet(
       `https://api.trakt.tv/users/${username}/history/shows?start_at=${fifteenDaysAgo}`,
-      { headers }
+      headers
     );
-    
+
     // 2. Get the ENTIRE list of watched shows to build a solid deny-list
     // We keep this full query to make sure we don't recommend ANYTHING ever watched.
     // Non-essential: if it fails we degrade to a history-only deny list instead of killing the feature
     let watchedData = [];
     try {
-      const watchedResponse = await axios.get(
+      const watchedResponse = await traktGet(
         `https://api.trakt.tv/users/${username}/watched/shows`,
-        { headers }
+        headers
       );
       watchedData = watchedResponse.data || [];
     } catch (watchedError) {
@@ -103,20 +141,16 @@ async function getWatchedMovies(userConfig) {
     return { recent: [], allWatched: [] };
   }
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'trakt-api-version': '2',
-    'trakt-api-key': clientId,
-  };
+  const headers = traktHeaders(clientId);
 
   // Only ask for history from the last 15 days to heavily optimize speed and capture current mood
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     // 1. Get recent history to seed recommendations (last 15 days only)
-    const historyResponse = await axios.get(
+    const historyResponse = await traktGet(
       `https://api.trakt.tv/users/${username}/history/movies?start_at=${fifteenDaysAgo}`,
-      { headers }
+      headers
     );
 
     // 2. Get the ENTIRE list of watched movies to build a solid deny-list
@@ -124,9 +158,9 @@ async function getWatchedMovies(userConfig) {
     // Non-essential: if it fails we degrade to a history-only deny list instead of killing the feature
     let watchedData = [];
     try {
-      const watchedResponse = await axios.get(
+      const watchedResponse = await traktGet(
         `https://api.trakt.tv/users/${username}/watched/movies`,
-        { headers }
+        headers
       );
       watchedData = watchedResponse.data || [];
     } catch (watchedError) {

@@ -9,6 +9,10 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+// Trakt is fronted by Cloudflare, which returns 403 to requests without a
+// User-Agent header. axios sets none by default, so we send one on every call.
+const TRAKT_USER_AGENT = 'StremioRecomendacion/2.2.1';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -31,16 +35,15 @@ app.post('/api/validate/trakt', async (req, res) => {
   const axios = require('axios');
   if (!trakt_username || !trakt_client_id) return res.status(400).json({ error: 'Username and Client ID are required.' });
   try {
-    await axios.get(`https://api.trakt.tv/users/${trakt_username}/profile`, {
-      headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': trakt_client_id }
+    await axios.get(`https://api.trakt.tv/users/${trakt_username}`, {
+      headers: { 'Content-Type': 'application/json', 'trakt-api-version': '2', 'trakt-api-key': trakt_client_id, 'User-Agent': TRAKT_USER_AGENT }
     });
     res.json({ success: true });
   } catch (e) {
     const status = e.response?.status;
     if (status === 404) return res.status(400).json({ error: 'Trakt user not found. Check your username.' });
-    if (status === 401) return res.status(400).json({ error: 'Invalid Trakt Client ID.' });
-    // 405 = profile is private, but credentials are valid
-    if (status === 405) return res.json({ success: true, warning: 'Valid! (Your Trakt profile is set to Private, but the addon can still read your history.)' });
+    // Trakt returns 403 for a bad client ID on this endpoint (401 is not used here).
+    if (status === 403 || status === 401) return res.status(400).json({ error: 'Invalid Trakt Client ID.' });
     res.status(400).json({ error: `Trakt validation failed (status ${status || 'unknown'}). Check both fields.` });
   }
 });
@@ -85,11 +88,12 @@ app.post('/api/validate', async (req, res) => {
   try {
     // 1. Validate Trakt
     try {
-      await axios.get(`https://api.trakt.tv/users/${trakt_username}/profile`, {
+      await axios.get(`https://api.trakt.tv/users/${trakt_username}`, {
         headers: {
           'Content-Type': 'application/json',
           'trakt-api-version': '2',
-          'trakt-api-key': trakt_client_id
+          'trakt-api-key': trakt_client_id,
+          'User-Agent': TRAKT_USER_AGENT
         }
       });
     } catch (e) {
@@ -97,10 +101,7 @@ app.post('/api/validate', async (req, res) => {
       if (status === 404) {
         return res.status(400).json({ error: "Usuario de Trakt no encontrado." });
       }
-      if (status !== 405) {
-        return res.status(400).json({ error: "Trakt Client ID inválido o error de API." });
-      }
-      // If status === 405, we consider it valid (Private Profile) and continue to TMDB validation.
+      return res.status(400).json({ error: "Trakt Client ID inválido o error de API." });
     }
 
     // 2. Validate TMDB
